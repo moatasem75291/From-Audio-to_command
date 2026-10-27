@@ -8,3 +8,4 @@ numpy>=1.26,<3
 soundfile>=0.13,<1
 sentencepiece>=0.2,<1
 protobuf>=5,<7
+torchvision
