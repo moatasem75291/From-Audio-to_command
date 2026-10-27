@@ -7,6 +7,8 @@ from unittest.mock import patch
 
 from streamlit.testing.v1 import AppTest
 
+APP_PATH = Path(__file__).resolve().parents[1] / "frontend" / "app.py"
+
 
 class FrontendTests(unittest.TestCase):
     def test_review_confirm_followup_and_clear(self):
@@ -18,7 +20,7 @@ class FrontendTests(unittest.TestCase):
         with patch("backend.model.QwenClient.reply", side_effect=[
             proposal, {"content": "Created notes.txt."},
         ]):
-            app = AppTest.from_file("frontend/app.py").run()
+            app = AppTest.from_file(str(APP_PATH)).run()
             self.assertFalse(app.exception)
             app.text_area[0].input("Create notes.txt with a greeting")
             next(button for button in app.button if button.label == "Send").click().run()
@@ -45,7 +47,7 @@ class FrontendTests(unittest.TestCase):
         }}]}
         with patch("backend.model.QwenClient.reply", return_value=proposal), \
                 patch("backend.tools.subprocess.Popen") as spawn:
-            app = AppTest.from_file("frontend/app.py").run()
+            app = AppTest.from_file(str(APP_PATH)).run()
             self.addCleanup(app.session_state["assistant"].tools.cleanup)
             app.text_area[0].input("Open calculator")
             next(button for button in app.button if button.label == "Send").click().run()
