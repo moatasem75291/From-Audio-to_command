@@ -1,0 +1,9 @@
+-r requirements.txt
+transformers>=5.4,<6
+torch>=2.6,<3
+accelerate>=1,<2
+librosa>=0.11,<1
+numpy>=1.26,<3
+soundfile>=0.13,<1
+sentencepiece>=0.2,<1
+protobuf>=5,<7
