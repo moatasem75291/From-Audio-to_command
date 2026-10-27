@@ -69,9 +69,16 @@ Hugging Face access conditions before downloading the weights.
    and 10 MB. Click **Transcribe audio**, review/edit the transcript, then **Send**.
 
 ASR loads weights lazily on first use, resamples to 16 kHz, and uses Arabic mode.
+For a small GPU, set `export ASR_DEVICE=cpu` before starting Streamlit to use
+system RAM. `ASR_DEVICE` defaults to `auto` for automatic device placement.
 It may use substantial RAM/VRAM. If Qwen and ASR share a GPU, budget memory for
 both. Very quiet audio is rejected; this simple check is not full speech detection.
 Reviewing the transcript is essential because speech recognition can be wrong.
+
+If transcription fails, the app distinguishes missing dependencies, denied model
+access, download errors, and insufficient memory. A valid `HF_TOKEN` alone does
+not grant access to gated weights: the same account must also have access on the
+model page. Restart Streamlit after changing dependencies or environment settings.
 
 ## Available tools
 

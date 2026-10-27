@@ -1,6 +1,7 @@
 """Validate short WAV recordings before lazily loading Cohere's Arabic ASR."""
 
 import io
+import os
 import wave
 from functools import lru_cache
 from threading import Lock
@@ -38,7 +39,8 @@ def _load_model():
 
     processor = AutoProcessor.from_pretrained(ASR_MODEL, trust_remote_code=False)
     model = CohereAsrForConditionalGeneration.from_pretrained(
-        ASR_MODEL, device_map="auto", trust_remote_code=False, use_safetensors=True,
+        ASR_MODEL, device_map=os.getenv("ASR_DEVICE", "auto"),
+        trust_remote_code=False, use_safetensors=True,
     )
     model.eval()
     return processor, model
@@ -50,7 +52,14 @@ def transcribe(data):
         import librosa
         import numpy as np
         import torch
+        from huggingface_hub.errors import GatedRepoError, HfHubHTTPError
+    except ImportError as error:
+        raise RuntimeError(
+            "Audio dependencies are missing or incompatible. Run: "
+            "python -m pip install -r requirements-audio.txt, then restart Streamlit."
+        ) from error
 
+    try:
         waveform = np.frombuffer(pcm, dtype="<i2").astype(np.float32) / 32768.0
         waveform = waveform.reshape(-1, channels).mean(axis=1)
         if float(np.sqrt(np.mean(waveform ** 2))) < 0.003:
@@ -60,10 +69,13 @@ def transcribe(data):
         with _INFERENCE_LOCK:
             processor, model = _load_model()
             inputs = processor(waveform, sampling_rate=16000, return_tensors="pt", language="ar")
+            chunk_index = inputs.get("audio_chunk_index")
             inputs.to(model.device, dtype=model.dtype)
             with torch.inference_mode():
                 output = model.generate(**inputs, max_new_tokens=256)
-            text = processor.decode(output, skip_special_tokens=True)
+            text = processor.decode(
+                output, skip_special_tokens=True, audio_chunk_index=chunk_index, language="ar",
+            )
         if isinstance(text, list):
             text = text[0] if text else ""
         if not isinstance(text, str) or not text.strip():
@@ -71,9 +83,30 @@ def transcribe(data):
         return text.strip()
     except SafetyError:
         raise
+    except GatedRepoError as error:
+        raise RuntimeError(
+            "Hugging Face denied access to Cohere Transcribe Arabic. Accept or request access at "
+            f"https://huggingface.co/{ASR_MODEL}, then start Streamlit with HF_TOKEN from "
+            "the same approved account. Never paste the token into a message or source file."
+        ) from error
+    except HfHubHTTPError as error:
+        raise RuntimeError(
+            "Could not download the transcription model. Check Hugging Face access, "
+            "HF_TOKEN, and the internet connection."
+        ) from error
+    except ImportError as error:
+        raise RuntimeError(
+            "The installed audio libraries do not support this model. "
+            "Install requirements-audio.txt and restart Streamlit."
+        ) from error
+    except torch.OutOfMemoryError as error:
+        raise RuntimeError(
+            "Transcription ran out of memory. Set ASR_DEVICE=cpu before starting Streamlit "
+            "to use system RAM instead of GPU memory."
+        ) from error
     except Exception as error:
         # Do not expose model cache paths, tokens, or provider tracebacks in the UI.
         raise RuntimeError(
-            "Transcription failed. Install requirements-audio.txt, accept the model's "
-            "Hugging Face access conditions, and check available memory and HF_TOKEN."
+            "Transcription failed while loading or running the model. Check available "
+            "memory, the model download, and the audio dependencies."
         ) from error
